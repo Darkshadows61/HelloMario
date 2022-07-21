@@ -13,6 +13,7 @@
 
 ; Reset memory?
 .segment "ZEROPAGE" ; LSB 0 - FF
+world: .res 2
 
 ; Where the code starts, purly organizational. Also to intialize the memory for use
 .segment "STARTUP"
@@ -79,7 +80,50 @@ LoadPalettes:
     CPX #$20
     BNE LoadPalettes
 
+    ; Initialize world to point to the world data
+    ; low byte to low byte, high byte to high byte
+    LDA #<WorldData ; low byte
+    STA world
+    LDA #>WorldData ; high byte
+    STA world+1
+
+    ; setup address in PPU for nametable data
+    BIT $2002
+    LDA #$20
+    STA $2006
+    LDA #$00
+    STA $2006
+
     LDX #$00
+    LDY #$00
+LoadWorld:
+    LDA (world), Y
+    STA $2007
+    INY 
+    CPX #$03
+    BNE :+
+    CPY #$C0
+    BEQ DoneLoadingWorld
+:
+    CPY #$00
+    BNE LoadWorld
+    INX
+    INC world+1
+    JMP LoadWorld
+
+DoneLoadingWorld:
+    LDX #$00
+
+SetAttributes:
+    LDA #$55
+    STA $2007
+    INX
+    CPX #$40
+    BNE SetAttributes
+
+    LDX #$00
+    LDY #$00
+
 LoadSprites:
     LDA SpriteData, X
     STA $0200, X
@@ -87,28 +131,7 @@ LoadSprites:
     CPX #$20
     BNE LoadSprites
 
-    ; Clear the nametables- this isn't necessary in most emulators unless
-; you turn on random memory power-on mode, but on real hardware
-; not doing this means that the background / nametable will have
-; random garbage on screen. This clears out nametables starting at
-; $2000 and continuing on to $2400 (which is fine because we have
-; vertical mirroring on. If we used horizontal, we'd have to do
-; this for $2000 and $2800)
-    LDX #$00
-    LDY #$00
-    LDA $2002
-    LDA #$20
-    STA $2006
-    LDA #$00
-    STA $2006
-ClearNametable:
-    STA $2007
-    INX
-    BNE ClearNametable
-    INY
-    CPY #$08
-    BNE ClearNametable
-
+ 
 ; Enable Interupts VERY IMPORTANT!!!
     CLI
 
@@ -128,6 +151,9 @@ NMI:
 PaletteData:
   .byte $22,$29,$1A,$0F,$22,$36,$17,$0f,$22,$30,$21,$0f,$22,$27,$17,$0F  ;background palette data
   .byte $22,$16,$27,$18,$22,$1A,$30,$27,$22,$16,$30,$27,$22,$0F,$36,$17  ;sprite palette data
+
+WorldData:
+    .incbin "world.bin"
 
 SpriteData:
   .byte $08, $00, $00, $08
